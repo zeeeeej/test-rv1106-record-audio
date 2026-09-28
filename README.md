@@ -45,3 +45,35 @@ scripts/deploy-adb.sh f3799b110c647633 build-arm/install
 ```
 
 程序动态使用板端 `/oem/usr/lib` 中已有的 Rockit、MPP、RGA 和 rkaudio 库，不复制或替换系统库。
+
+## 语音命令客户端
+
+`hd_voice_client` 复用相同的 16 kHz 单声道录音和 ANR，录音结束后上传到业务网关，校验并保存返回的 WAV，然后通过板端 `aplay` 播放：
+
+```sh
+HD_VOICE_API_KEY=devkey-gateway \
+/userdata/hd-record-audio/bin/hd_voice_client \
+  --server-url http://192.168.1.10:8080 \
+  -o /userdata/command.wav \
+  --reply-output /userdata/reply.wav
+```
+
+- 默认按回车结束录音；也可使用 `-d SECONDS` 定时结束。
+- `--playback-device` 默认是 `plughw:0,0`。
+- 录音、应答及其 `.part` 路径都不会被覆盖。
+- `HD_VOICE_API_KEY` 只通过 curl 标准输入传递，不会出现在命令行参数中。
+- 退出码：`2` 参数、`3` 录音、`4` 文件、`5` 配置、`6` 网络、`7` 服务、`8` 响应格式、`9` 播放。
+
+板端安装后也可以直接运行包装脚本：
+
+```sh
+/userdata/hd-record-audio/bin/hd_voice_command
+```
+
+脚本自动创建 `/userdata/voice`，并依次使用 `command-1.wav` / `reply-1.wav`、
+`command-2.wav` / `reply-2.wav` 等未占用文件名。参数会继续传给客户端，例如
+`hd_voice_command -d 5`。以下环境变量可覆盖默认设置：
+
+- `HD_VOICE_SERVER_URL`：默认 `http://192.168.1.115:8080`
+- `HD_VOICE_API_KEY`：默认 `devkey-gateway`
+- `HD_VOICE_DIR`：默认 `/userdata/voice`

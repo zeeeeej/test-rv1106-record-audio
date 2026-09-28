@@ -1,5 +1,7 @@
 #include "audio_frame.h"
 #include "cli.h"
+#include "voice_client.h"
+#include "voice_client_cli.h"
 #include "wav_writer.h"
 
 #include <array>
@@ -67,6 +69,29 @@ void test_cli() {
     expect_throw([&] { hdra::parse_cli(4, unknown); });
 }
 
+void test_voice_client_cli() {
+    const char *valid[] = {
+        "voice", "--server-url", "http://192.168.1.10:8080/", "-o", "/tmp/command.wav",
+        "--reply-output", "/tmp/reply.wav", "--playback-device", "default", "-d", "2.5",
+    };
+    const auto options = hdra::parse_voice_client_cli(11, valid);
+    CHECK(options.server_url == "http://192.168.1.10:8080");
+    CHECK(options.output_path == "/tmp/command.wav");
+    CHECK(options.reply_output_path == "/tmp/reply.wav");
+    CHECK(options.playback_device == "default");
+    CHECK(options.duration_seconds.has_value());
+    CHECK(std::abs(*options.duration_seconds - 2.5) < 0.0001);
+
+    const char *missing_server[] = {"voice", "-o", "a.wav", "--reply-output", "b.wav"};
+    expect_throw([&] { hdra::parse_voice_client_cli(5, missing_server); });
+    const char *same_output[] = {
+        "voice", "--server-url", "http://host", "-o", "a.wav", "--reply-output", "a.wav",
+    };
+    expect_throw([&] { hdra::parse_voice_client_cli(7, same_output); });
+    expect_throw([&] { hdra::normalize_server_url("ftp://host"); });
+    expect_throw([&] { hdra::normalize_server_url("http://bad host"); });
+}
+
 void test_audio_frame_conversion() {
     const std::array<uint8_t, 8> stereo = {
         0x01, 0x02, 0x11, 0x12,
@@ -126,13 +151,39 @@ void test_partial_is_valid() {
     ::rmdir(directory.c_str());
 }
 
+void test_voice_client_helpers() {
+    const auto process = hdra::run_process_with_input(
+        "/bin/sh", {"-c", "IFS= read -r line; printf 'seen:%s' \"$line\""}, "hello\n");
+    CHECK(process.exit_code == 0);
+    CHECK(process.stdout_text == "seen:hello");
+
+    const std::string directory = make_temp_dir();
+    const std::string good = directory + "/good.wav";
+    const std::string bad = directory + "/bad.wav";
+    {
+        std::ofstream output(good, std::ios::binary);
+        output.write("RIFF\x24\x00\x00\x00WAVE", 12);
+    }
+    {
+        std::ofstream output(bad, std::ios::binary);
+        output << "not audio";
+    }
+    CHECK(hdra::is_wav_file(good));
+    CHECK(!hdra::is_wav_file(bad));
+    ::unlink(good.c_str());
+    ::unlink(bad.c_str());
+    ::rmdir(directory.c_str());
+}
+
 }  // namespace
 
 int main() {
     test_cli();
+    test_voice_client_cli();
     test_audio_frame_conversion();
     test_wav_writer();
     test_partial_is_valid();
+    test_voice_client_helpers();
     if (failures != 0) {
         std::cerr << failures << " test(s) failed\n";
         return 1;

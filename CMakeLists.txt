@@ -13,6 +13,8 @@ option(HD_RECORD_AUDIO_BUILD_RECORDER "Build the RV1106 recorder executable" ON)
 add_library(hd_record_core
     src/audio_frame.cpp
     src/cli.cpp
+    src/voice_client.cpp
+    src/voice_client_cli.cpp
     src/wav_writer.cpp
 )
 target_include_directories(hd_record_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -35,18 +37,36 @@ if(HD_RECORD_AUDIO_BUILD_RECORDER)
         src/main.cpp
         src/rk_audio_recorder.cpp
     )
+    add_executable(hd_voice_client
+        src/voice_client_main.cpp
+        src/rk_audio_recorder.cpp
+    )
     target_include_directories(hd_record_audio PRIVATE "${RK_MPI_ROOT}/include")
+    target_include_directories(hd_voice_client PRIVATE "${RK_MPI_ROOT}/include")
     target_link_libraries(hd_record_audio PRIVATE hd_record_core "${ROCKIT_LIBRARY}" pthread)
+    target_link_libraries(hd_voice_client PRIVATE hd_record_core "${ROCKIT_LIBRARY}" pthread)
     set_target_properties(hd_record_audio PROPERTIES
+        BUILD_RPATH "/oem/usr/lib"
+        INSTALL_RPATH "/oem/usr/lib"
+    )
+    set_target_properties(hd_voice_client PROPERTIES
         BUILD_RPATH "/oem/usr/lib"
         INSTALL_RPATH "/oem/usr/lib"
     )
     target_link_options(hd_record_audio PRIVATE
         "-Wl,-rpath-link,${RK_MPI_ROOT}/lib/uclibc"
     )
+    target_link_options(hd_voice_client PRIVATE
+        "-Wl,-rpath-link,${RK_MPI_ROOT}/lib/uclibc"
+    )
     target_compile_options(hd_record_audio PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(hd_voice_client PRIVATE -Wall -Wextra -Wpedantic)
 
-    install(TARGETS hd_record_audio RUNTIME DESTINATION bin)
+    install(TARGETS hd_record_audio hd_voice_client RUNTIME DESTINATION bin)
+    install(PROGRAMS scripts/hd_voice_command.sh
+        DESTINATION bin
+        RENAME hd_voice_command
+    )
     install(FILES config/config_aivqe_anr.json DESTINATION share/hd-record-audio)
 endif()
 
